@@ -29,6 +29,17 @@ builder.Services.AddSingleton<ElasticsearchClient>(sp =>
     return new ElasticsearchClient(settings);
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactDev", policy =>
+    {
+        policy.WithOrigins(
+              "http://localhost:5173"
+          )
+            .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
 
@@ -40,9 +51,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("AllowReactDev");
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();

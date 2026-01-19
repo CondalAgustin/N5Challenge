@@ -29,13 +29,26 @@ namespace N5Challenge.Controllers
                 .Size(100)
             );
 
-            var permissions = response?.Hits
-                ?.Select(h => h.Source)
-                ?.Where(p => p != null)
-                .ToList();
-
-            if (permissions == null || permissions.Count == 0)
+            if (response == null || !response.IsValidResponse)
+            {
                 return Ok(new List<object>());
+            }
+
+            var permissions = response.Hits?
+                .Where(h => h.Source != null)
+                .Select(h => h.Source)
+                .ToList()
+                ?? new List<PermissionElasticDto>();
+
+            if (!permissions.Any())
+            {
+                return Ok(new List<object>());
+            }
+
+            if (_context == null)
+            {
+                return StatusCode(500, "DbContext no inicializado");
+            }
 
             var tipoPermisos = await _context.PermissionTypes
                 .ToDictionaryAsync(tp => tp.Id, tp => tp.Descripcion);
@@ -46,14 +59,15 @@ namespace N5Challenge.Controllers
                 p.NombreEmpleado,
                 p.ApellidoEmpleado,
                 p.TipoPermisoId,
-                TipoPermisoDescripcion = tipoPermisos.ContainsKey(p.TipoPermisoId)
-                    ? tipoPermisos[p.TipoPermisoId]
+                TipoPermisoDescripcion = tipoPermisos.TryGetValue(p.TipoPermisoId, out var desc)
+                    ? desc
                     : null,
                 p.FechaPermiso
             });
 
             return Ok(result);
         }
+
 
 
 
@@ -94,7 +108,10 @@ namespace N5Challenge.Controllers
             }
 
 
-            await _elasticClient.IndexAsync(elasticDoc);
+            await _elasticClient.IndexAsync(elasticDoc, i => i
+                .Index("permissions")
+                .Refresh(Refresh.WaitFor)
+            );
 
             return CreatedAtAction(nameof(GetPermissions), new { id = permission.Id }, permission);
         }
@@ -127,6 +144,7 @@ namespace N5Challenge.Controllers
             await _elasticClient.IndexAsync(elasticDoc, i => i
                 .Index("permissions")
                 .Id(permission.Id)
+                .Refresh(Refresh.True)
             );
 
             return Ok(permission);
